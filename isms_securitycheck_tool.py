@@ -1,7 +1,7 @@
 import asyncio
 from pydantic import BaseModel, Json
 from pydantic_ai import Agent, RunContext
-from typing import Literal, Set, Union, List, Any, Dict
+from typing import Literal, Set, Optional, List, Any, Dict
 import os
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -29,6 +29,7 @@ logger.setLevel(logging.DEBUG)
 
 class UpdateTask(BaseModel):
     """更新が必要なコンピューターと更新対象のソフトウェア名"""
+    date_of_update: Optional[str]
     computer_name: str
     last_logon_user: str
     software_to_be_updated: Set[Literal["windows update", "Google Chrome", "Firefox", "Thunderbird", "Adobe Reader", "SKYSEA"]]
@@ -48,18 +49,18 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 sheet_agent = Agent(  
     #'openai:gpt-4o',
-    'anthropic:claude-sonnet-4-0',
+    'openai:gpt-4o-mini',
     deps_type=str,
-    output_type=Json[List[Dict[str, Any]]],
-    retries=5
+    output_type=UpdateTasksList,
+    retries=2
     )
 
-summary_agent = Agent(  
+filter_agent = Agent(  
     #'openai:gpt-4o',
-    'anthropic:claude-sonnet-4-0',
-    deps_type=List[Dict[str, Any]],
-    output_type=Json[List[Dict[str, Any]]],
-    retries=5
+    'openai:gpt-4o-mini',
+    deps_type=UpdateTasksList,
+    output_type=UpdateTasksList,
+    retries=2
     )
 
 def get_google_sheets_service():
@@ -145,40 +146,49 @@ def get_sheet_data(ctx: RunContext[str], spreadsheet_id: str, ranges: List[str])
     
     return _convert_to_dict(all_data)
 
-@summary_agent.tool
-def tasks_not_completed(ctx: RunContext[List[Dict[str, Any]]], tasks: List[dict], key: str) -> List[dict]:
-    """まだ完了していないセキュリティ更新タスクを抽出する
 
-    Args:
-        tasks(List[dict]): 取得したセキュリティ更新タスク情報のリスト。1つのタスクはdictで表現される。 
-        key (str): 完了したタスクと完了していないタスクを区別するキー。このキーに対応する値が空のタスク（dict）は、完了していないものと見做す
-    
+@filter_agent.tool
+def filter_update_tasks(ctx: RunContext[UpdateTasksList]) -> UpdateTasksList:
+    """アップデート対応日（date_of_update)が指定されていないUpdateTaskのみをフィルターして返す
+
     Returns:
-        List[dict]: まだ完了していないセキュリティ更新タスクのリスト
-
+        UpdateTasksList: フィルターした結果のUpdateTaskのList
     """
-    return [task for task in tasks if task[key] == "" or task[key] is None]
-
-
-@summary_agent.instructions
-def all_tasks(ctx: RunContext[List[Dict[str, Any]]]):
-    all_tasks: List[Dict[str, Any]] = ctx.deps
-    return f"セキュリティ更新タスク情報の全件は下記の通り。この json は復元すると List[dict] の形になる。 \n ------ \n {json.dumps(all_tasks)}"
+    breakpoint()
+    update_task_list = ctx.deps.tasks
+    filtered_update_task_list = [task for task in update_task_list if (task.date_of_update == "" or task.date_of_update is None)]
+    result = UpdateTasksList(tasks=filtered_update_task_list, total_count=len(filtered_update_task_list))
+    return result
 
 
 async def main():
     """メイン処理"""
     spreadsheet_id = "1Xsfuf96REAlmPRXUfrgkaKYZdoy994BmL4REtHX9nvI"
-    sheet_range = "未更新端末一覧!B13:O89"
-    prompt_get_all_tasks = f""" spreadsheet_id = {spreadsheet_id}, ranges = {sheet_range} のGoogle Sheet に記載されている、まだ完了していないセキュリティ更新タスクをJson形式で全件取得してください。"""
-    prompt_filter_remained_tasks = """抽出に利用するkeyは、「アップデート対応日」です。結果はJson形式で出力して下さい"""
+    #sheet_range = "未更新端末一覧!B13:O89"
+    sheet_range = "未更新端末一覧!B13:O16"
+    prompt_get_all_tasks = (f""" spreadsheet_id = {spreadsheet_id}, ranges = {sheet_range} のGoogle Sheet に記載されている、まだ完了していないセキュリティ更新タスクを全件取得してください。
+
+取得したセキュリティ更新タスクの情報を、UpdateTask に変換する際のポイントについて、例を交えて説明します。"""
+
+        '以下のセキュリティ更新タスク情報があった場合、\n'
+        '> {"アップデート対応日":"","端末機№":"977","部署名":"CH","コンピューター名":"HOPC127","最終ログオンユーザ":"jinji","最終ログオンユーザ\\n 表示名":"人事PC","OS":"Windows 10","IEまたはOSビルドのバージョン":"22H2(19045.4651)","Windows Update\\n／WithSecure":"×","Google Chrome":"127.0.6533.089","Mozilla Firefox":"","Mozilla Thunderbird":"","Adobe Reader":"24.002.20895","SKYSEA":"19.300.09h"}\n'
+        '対応するUpdateTaskは下記の通りです。\n'
+        '（たとえば、"Mozilla Firefox" に対応する値が空文字なので、software_to_be_updatedには"Firefox"は含まれません。）\n'
+        '> UpdateTask(date_of_update="", computer_name="HOPC127", last_logon_user="jinji", software_to_be_updated=("Google Chrome", "Adobe Reader", "SKYSEA"))\n\n'
+        'また、以下のセキュリティ更新タスク情報があった場合、\n'
+        '> {"アップデート対応日":"2025-08-13","端末機№":"977","部署名":"CH","コンピューター名":"HOPC127","最終ログオンユーザ":"jinji","最終ログオンユーザ\\n 表示名":"人事PC","OS":"Windows 10","IEまたはOSビルドのバージョン":"22H2(19045.4651)","Windows Update\\n／WithSecure":"×","Google Chrome":"127.0.6533.089","Mozilla Firefox":"","Mozilla Thunderbird":"","Adobe Reader":"24.002.20895","SKYSEA":"19.300.09h"}\n'
+        '対応するUpdateTaskは存在しません。アップデート対応日に"2025-08-13"という具体的な日付が指定されているためです。'
+        )
+
+    print(prompt_get_all_tasks)
     
     try:
         # breakpoint()
-        all_tasks = await sheet_agent.run(prompt_get_all_tasks, deps="hogehoge")
-        # breakpoint()
-        remained_tasks = await summary_agent.run(prompt_filter_remained_tasks, deps=all_tasks.output)
-        print(remained_tasks)
+        tasks = await sheet_agent.run(prompt_get_all_tasks, deps="hogehoge")
+        breakpoint()
+        final_tasks = await filter_agent.run("アップデート対応日（date_of_update）が指定されていないUpdateTaskのみをフィルターして下さい。フィルターした結果、0件の場合もあり得ます。",
+                                             deps=tasks.output)
+        print(final_tasks)
     except Exception as e:
         print(f"エラーが発生しました: {e}")
         import traceback
