@@ -14,6 +14,7 @@ import logfire
 
 logfire.configure()  
 logfire.instrument_pydantic_ai()
+logfire.instrument_httpx(capture_all=True)
 
 
 # ロギングの基本設定
@@ -154,7 +155,7 @@ def filter_update_tasks(ctx: RunContext[UpdateTasksList]) -> UpdateTasksList:
     Returns:
         UpdateTasksList: フィルターした結果のUpdateTaskのList
     """
-    breakpoint()
+    # breakpoint()
     update_task_list = ctx.deps.tasks
     filtered_update_task_list = [task for task in update_task_list if (task.date_of_update == "" or task.date_of_update is None)]
     result = UpdateTasksList(tasks=filtered_update_task_list, total_count=len(filtered_update_task_list))
@@ -164,8 +165,8 @@ def filter_update_tasks(ctx: RunContext[UpdateTasksList]) -> UpdateTasksList:
 async def main():
     """メイン処理"""
     spreadsheet_id = "1Xsfuf96REAlmPRXUfrgkaKYZdoy994BmL4REtHX9nvI"
-    #sheet_range = "未更新端末一覧!B13:O89"
-    sheet_range = "未更新端末一覧!B13:O16"
+    sheet_range = "未更新端末一覧!B13:O89"
+    #sheet_range = "未更新端末一覧!B13:O16"
     prompt_get_all_tasks = (f""" spreadsheet_id = {spreadsheet_id}, ranges = {sheet_range} のGoogle Sheet に記載されている、まだ完了していないセキュリティ更新タスクを全件取得してください。
 
 取得したセキュリティ更新タスクの情報を、UpdateTask に変換する際のポイントについて、例を交えて説明します。"""
@@ -185,7 +186,7 @@ async def main():
     try:
         # breakpoint()
         tasks = await sheet_agent.run(prompt_get_all_tasks, deps="hogehoge")
-        breakpoint()
+        # breakpoint()
         final_tasks = await filter_agent.run("アップデート対応日（date_of_update）が指定されていないUpdateTaskのみをフィルターして下さい。フィルターした結果、0件の場合もあり得ます。",
                                              deps=tasks.output)
         print(final_tasks)

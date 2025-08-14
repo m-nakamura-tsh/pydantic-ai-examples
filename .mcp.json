@@ -28,12 +28,27 @@
       ],
       "env": {}
     },
-    "google-sheets": {
+    "google-sheets-custom": {
       "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "google_sheets_mcp_server.py"
+      ],
+      "env": {
+        "GOOGLE_SHEETS_CREDENTIALS": "credentials.json",
+        "GOOGLE_SHEETS_TOKEN": "token.json"
+      }
+    },
+    "logfire":{
       "command": "uvx",
       "args": [
-        "mcp-google-sheets@latest"
-      ]
+        "logfire-mcp"
+      ],
+      "env": {
+        "LOGFIRE_READ_TOKEN": "pylf_v1_us_hGr464vWTlyqZW6RHBQn42Yxqfx781GnBs4jxhm8R6g2"
+      }
     }
   }
 }
