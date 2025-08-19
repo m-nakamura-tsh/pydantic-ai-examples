@@ -1,0 +1,29 @@
+[project]
+name = "2025-08-pydantic-ai-exercises"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic-ai[examples,logfire]>=0.4.11",
+    "pydantic-graph>=0.4.11",
+    "pytest>=8.4.1",
+    "rich>=14.1.0",
+    "google-auth>=2.0.0",
+    "google-auth-oauthlib>=1.0.0",
+    "google-auth-httplib2>=0.1.0",
+    "google-api-python-client>=2.0.0",
+    "fastmcp>=0.1.0",
+    "dirty-equals>=0.9.0",
+    "devtools>=0.12.2",
+    "fire>=0.7.0",
+    "slack-bolt>=1.18.0",
+    "slack-sdk>=3.26.0",
+    "sqlalchemy>=2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.17.1",
+    "pytest-asyncio>=1.1.0",
+]
