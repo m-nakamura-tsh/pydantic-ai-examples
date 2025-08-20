@@ -5,11 +5,11 @@ ProcessPoolExecutorを使用したバックグラウンドタスク実行とユ�
 ## 機能
 
 - Slackチャンネルでbotにメンション（`@bot run_task`）することでタスクを実行
-- バックグラウンドでタスクを実行（ProcessPoolExecutor使用）
+- ESA記事の要約タスクを非同期で実行
 - タスク実行中にユーザーへの確認を求める機能
-- 承認/拒否ボタンによるインタラクティブな操作
-- 拒否時の理由入力フォーム
-- SQLiteデータベースによるタスク状態管理
+- 承認/リトライボタンによるインタラクティブな操作
+- リトライ時の理由入力と、それに基づく要約の再生成
+- SQLiteデータベースによるタスク状態とメッセージ履歴の管理
 
 ## セットアップ
 
@@ -95,7 +95,7 @@ pytest tests/
 slack_bot/
 ├── __init__.py
 ├── app.py              # メインのSlack Botアプリケーション
-├── background_task.py  # バックグラウンドタスク処理
+├── background_task.py  # バックグラウンドタスク処理（ESA要約）
 ├── models.py          # SQLAlchemyモデル定義
 └── README.md          # このファイル
 
@@ -109,8 +109,9 @@ tests/
 ### 主要コンポーネント
 
 - **SlackBot**: メインのボットクラス。イベントハンドラーとアクション処理を管理
-- **TaskManager**: ProcessPoolExecutorを使用したタスク実行管理
-- **Task**: SQLAlchemyモデル。タスクの状態とメタデータを保存
+- **TaskManager**: ESA記事の要約タスクと、フィードバックに基づく再要約を管理
+- **TaskRepository**: タスクのデータベース操作を管理するリポジトリクラス
+- **Task**: SQLAlchemyモデル。タスクの状態、メタデータ、メッセージ履歴を保存
 
 ### データベーススキーマ
 
@@ -121,7 +122,8 @@ tests/
 | thread_ts | String | スレッドのタイムスタンプ |
 | user_id | String | タスクを開始したユーザーID |
 | status | Enum | タスクのステータス |
-| rejection_reason | String | 拒否理由（拒否時のみ） |
+| rejection_reason | String | リトライ理由（リトライ時のみ） |
+| model_messages | JSON | LLMとのメッセージ履歴 |
 | created_at | DateTime | 作成日時 |
 | updated_at | DateTime | 更新日時 |
 
@@ -130,12 +132,13 @@ tests/
 - `PENDING`: タスク開始待ち
 - `AWAITING_CONFIRMATION`: ユーザー確認待ち
 - `APPROVED`: 承認済み
-- `REJECTED`: 拒否済み
+- `RETRY`: リトライ（フィードバックに基づく再処理）
 - `COMPLETED`: 完了
 
 ## 開発メモ
 
 - Socket Modeを使用しているため、外部公開URLは不要
-- ProcessPoolExecutorは最大4ワーカーで設定
-- ダミータスクは単純なsleep処理（本番環境では実際の処理に置き換える）
+- 非同期処理にはAsyncAppとAsyncSocketModeHandlerを使用
+- ESA記事の要約にはPydantic AIとlogfireを活用
+- メッセージ履歴はJSONカラムに保存し、ModelMessagesTypeAdapterで復元
 - データベースはSQLite（本番環境ではPostgreSQL等を推奨）
